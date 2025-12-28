@@ -88,7 +88,10 @@
               <option value="ANSUR_II" selected>ANSUR II</option>
               <option value="ANSUR_I">ANSUR I</option>
             </select>
-            <button type="button" id="btnLoadData" class="btn-secondary btn-sm">Load</button>
+          </div>
+
+          <div class="row">
+            <button type="button" id="btnLoadData" class="btn-primary" style="padding: 8px;">Load Dataset</button>
           </div>
 
           <div id="loadingUI" style="margin-top:8px;">
@@ -176,8 +179,8 @@ Operators: AND, OR, parentheses ()"></textarea>
           <button type="button" id="btnRun" disabled class="btn-primary" style="padding:12px; font-size:14px;">GENERATE
             REPORT</button>
           <div class="row" style="margin-top:8px;">
-            <button type="button" id="btnSave" disabled class="btn-secondary btn-sm" style="flex:1;">Save to localStorage</button>
-            <button type="button" id="btnLoadSaved" disabled class="btn-secondary btn-sm" style="flex:1;">Load from localStorage</button>
+            <button type="button" id="btnSave" disabled class="btn-secondary btn-sm" style="flex:1;">Save Config to localStorage</button>
+            <button type="button" id="btnLoadSaved" disabled class="btn-secondary btn-sm" style="flex:1;">Load Config from localStorage</button>
             <button type="button" onclick="window.print()" class="btn-secondary btn-sm" style="flex:1;">Print PDF</button>
           </div>
           <div id="runMsg" class="sub-label" style="text-align:center; margin-top:5px;"></div>
