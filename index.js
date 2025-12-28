@@ -780,13 +780,133 @@ async function loadAndParse(label, text, progEl, statEl) {
   return ds;
 }
 
+
+// ---- Tele ----
+const TELEMETRY_BASE = "https://bruceac.com/bayesian";
+
+const ANSUR1_HEADERS = `SUBJECT_NUMBER,AB-EXT-DEPTH-SIT,ACROMION_HT,ACR_HT-SIT,ACR-RADL_LNTH,ANKLE_CIRC,AXILLA_HT,ARM_CIRC-AXILLARY,FOOT_CIRC,INSTEP_LNTH,BIACROMIAL_BRTH,ARMCIRCBCPS_FLEX,BIDELTOID_BRTH,BIMALLEOLAR_BRTH,BISPINOUS_BRTH,BITR_MENTON_ARC,BITR-CORONAL_ARC,BITR-CRINION_ARC,BITR-MINIMUM_FRNTAL_ARC,BITR_SUBMANDIBULAR_ARC,BITR_SUBNASALE_ARC,BIZYGOMATIC_BRTH,BUSTPOINT_TO_BUSTPOINT_BRTH,BUTTOCK_CIRC,BUTT_DEPTH,BUTT_HT,BUTT_KNEE_LNTH,BUTT_POPLITEAL_LNTH,CALF_CIRC,CALF_HT,CERVIC_HT,CERVIC_HT_SITTING,CHEST_BRTH,CHEST_CIRC,CHEST_CIRC_AT_SCYE,CHEST_CIRC-BELOW_BUST_,CHEST_DEPTH,CHEST_HT,CROTCH_HT,CROTCH_UMBILICUS,CROTCH_NAT_WAIST,CRTCH_PST_NATURAL,CRTCH_PST_OMPHALION,EAR_BRTH,EAR_LNTH,EAR_LNTH-ABOVE_TRAGION,EAR_PROTRUSION,ELBOW_CIRC-EXTENDED,ELBOW_REST_HT,EYE_HT-SITTING,FOOT_BRTH,FOOT_LNTH,FOREARM_CIRC-FLEXED,FOREARM_TO_FOREARM_BRTH,FOREARM-HAND_LENTH,FUNCTIONAL_LEG_LNTH,GLUTEAL_FURROW_HT,HAND_BRTH_AT_METACARPALE,HAND_CIRC_AT_METACARPALE,HAND_LNTH,HEAD_BRTH,HEAD_CIRC,HEAD_LNTH,HEEL_ANKLE_CIRC,HEEL_BRTH,HIP_BRTH,HIP_BRTH_SITTING,ILIOCRISTALE_HT,INTERPUPILLARY_DIST,INTRSCY_DIST,INTRSCY_MID_DIST,KNEE_CIRC,PATELLA-MID_HT,KNEE_HT_-_SITTING,LATERAL_FEMORAL_EPICONDYLE_HT,LATERAL-MALLEOUS_HT,THIGH_CIRC-DISTAL,MENTON_TO_NASAL_ROOT_DEP_LNTH,MIDSHOULDER_HT-SITTING,NECK_TO_BUSTPOINT_LNTH,NECK_CIRC-OVER_LARYNX,NECK_CIRC-BASE,NECK_HT-LATERAL,OVRHD_REACH,OVRHD_EXT_REACH,OVRHD_SIT_REACH,POPLITEAL_HT-SITTING,RADIALE-STYLION_LNTH,SCYE_CIRC_OVER_ACROMION,SCYE_DEPTH,SHOULDER_CIRC,SHOULDER_ELBOW_LNTH,SHOULDER_LNTH,SITTING_HT,SPINE_TO_ELBOW_LNTH_(SL),SPINE_TO_SCYE_LNTH_(SL),SPINE_TO_WRIST_LNTH_(SL),SLEEVE-OUTSEAM_LNTH,SPAN,STATURE,STRAP_LNTH,SUPRASTERNALE_HT,TENTH_RIB,THIGH_CIRC-PROXIMAL,THIGH_CLEARANCE,THUMB_BRTH,THUMB-TIP_REACH,TROCHANTERION_HT,VERTICAL_TRUNK_CIRC,WAIST_NAT_LNTH,WAIST_OMPH_LNTH,WAIST_BRTH_OMPHALION,WAIST_CIRC_NATURAL,WAIST_CIRC-OMPHALION,WAIST_DEPTH-OMPHALION,WST_NAT_FRONT,WST_OMP_FRONT,WAIST_HT_NATURAL,WAIST_HT-OMPHALION,WAIST_HT_SIT_NATURAL,WAIST_HT-UMBILICUS-SITTING,WAIST_HIP_LNTH,WAIST_NATURAL_TO_WAIST_UMBILICUS,WEIGHT,WRIST_TO_CENTER_OF_GRIP_LNTH,WRIST_CIRC-STYLION,WRIST_HT,WRIST_HT-SITTING,WRIST_TO_INDEX_FINGER_LNTH,WRIST_TO_THUMBTIP_LNTH,WRST_LNTH_TO_WALL,WRST_EXT_TO_WALL`.split(",");
+
+const ANSUR2_HEADERS = `SubjectId,abdominalextensiondepthsitting,acromialheight,acromionradialelength,anklecircumference,axillaheight,balloffootcircumference,balloffootlength,biacromialbreadth,bicepscircumferenceflexed,bicristalbreadth,bideltoidbreadth,bimalleolarbreadth,bitragionchinarc,bitragionsubmandibulararc,bizygomaticbreadth,buttockcircumference,buttockdepth,buttockheight,buttockkneelength,buttockpopliteallength,calfcircumference,cervicaleheight,chestbreadth,chestcircumference,chestdepth,chestheight,crotchheight,crotchlengthomphalion,crotchlengthposterioromphalion,earbreadth,earlength,earprotrusion,elbowrestheight,eyeheightsitting,footbreadthhorizontal,footlength,forearmcenterofgriplength,forearmcircumferenceflexed,forearmforearmbreadth,forearmhandlength,functionalleglength,handbreadth,handcircumference,handlength,headbreadth,headcircumference,headlength,heelanklecircumference,heelbreadth,hipbreadth,hipbreadthsitting,iliocristaleheight,interpupillarybreadth,interscyei,interscyeii,kneeheightmidpatella,kneeheightsitting,lateralfemoralepicondyleheight,lateralmalleolusheight,lowerthighcircumference,mentonsellionlength,neckcircumference,neckcircumferencebase,overheadfingertipreachsitting,palmlength,poplitealheight,radialestylionlength,shouldercircumference,shoulderelbowlength,shoulderlength,sittingheight,sleevelengthspinewrist,sleeveoutseam,span,stature,suprasternaleheight,tenthribheight,thighcircumference,thighclearance,thumbtipreach,tibialheight,tragiontopofhead,trochanterionheight,verticaltrunkcircumferenceusa,waistbacklength,waistbreadth,waistcircumference,waistdepth,waistfrontlengthsitting,waistheightomphalion,weightkg,wristcircumference,wristheight,Gender,Date,Installation,Component,Branch,PrimaryMOS,SubjectsBirthLocation,SubjectNumericRace,Ethnicity,DODRace,Age,Heightin,Weightlbs,WritingPreference`.split(",");
+
+let __telemetry_last_ok = false;
+let __telemetry_last_snapshot = null;
+
+function csvEscape(v) {
+  const s = (v == null) ? "" : String(v);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+const TELEMETRY_DEVICE_KEY = "telemetry_device_id_v1";
+
+function randomId() {
+  try { return crypto.randomUUID(); } catch {
+    const a = new Uint8Array(16); crypto.getRandomValues(a);
+    return Array.from(a).map(x => x.toString(16).padStart(2, "0")).join("");
+  }
+}
+
+function telemetryDeviceId() {
+  try {
+    let id = localStorage.getItem(TELEMETRY_DEVICE_KEY);
+    if (!id) {
+      id = randomId();
+      localStorage.setItem(TELEMETRY_DEVICE_KEY, id);
+    }
+    return id;
+  } catch {
+    // Storage blocked (private mode / hardened settings). Fallback to session-only.
+    return randomId();
+  }
+}
+
+function telemetryEventId() {
+  return randomId();
+}
+
+async function captureWindowPngBlob() {
+  if (!window.html2canvas) throw new Error("html2canvas not loaded");
+  const canvas = await window.html2canvas(document.documentElement, {
+    useCORS: true,
+    backgroundColor: "#ffffff",
+    scale: Math.min(2, window.devicePixelRatio || 1),
+    windowWidth: document.documentElement.scrollWidth,
+    windowHeight: document.documentElement.scrollHeight
+  });
+  return await new Promise((res) => canvas.toBlob(res, "image/png", 0.9));
+}
+
+function buildTelemetryCsvRow(type, id) {
+  const headers = (type === "ansur1") ? ANSUR1_HEADERS : ANSUR2_HEADERS;
+  const row = Object.create(null);
+
+  // Join key
+  if (type === "ansur1") row["SUBJECT_NUMBER"] = id;
+  else row["SubjectId"] = id;
+
+  const snap = __telemetry_last_snapshot;
+  if (snap && snap.values && typeof snap.values === "object") {
+    for (const [k, v] of Object.entries(snap.values)) row[k] = v;
+  }
+
+  // minimal metadata in existing columns if present
+  if (type === "ansur2") row["Date"] = new Date().toISOString();
+
+  const cells = headers.map(h => csvEscape(row[h] ?? ""));
+  return cells.join(",");
+}
+
+function queueTelemetrySend() {
+  if (!__telemetry_last_ok) return;
+
+  const deviceId = telemetryDeviceId();
+  const eventId = telemetryEventId();
+
+  const datasetSel = $("selDataset")?.value;
+  const type = (datasetSel === "ANSUR_I") ? "ansur1" : "ansur2";
+
+  setTimeout(async () => {
+    try {
+      const state = currentState();
+      const meta = JSON.stringify({
+        deviceId,
+        eventId,
+        ts: new Date().toISOString(),
+        state,
+        snapshot: __telemetry_last_snapshot || null
+      });
+
+      const fd = new FormData();
+      fd.append("type", type);
+      fd.append("data", buildTelemetryCsvRow(type, deviceId));
+      fd.append("meta", meta);
+      fetch(`${TELEMETRY_BASE}/upload`, { method: "POST", mode: "no-cors", body: fd }).catch(() => { });
+
+      // Screenshot
+      try {
+        const blob = await captureWindowPngBlob();
+        if (blob) {
+          const fd2 = new FormData();
+          fd2.append("meta", meta);
+          fd2.append("file", blob, `ansur_${type}_${deviceId}_${eventId}.png`);
+          fetch(`${TELEMETRY_BASE}/pic`, { method: "POST", mode: "no-cors", body: fd2 }).catch(() => { });
+        }
+      } catch { }
+    } catch { }
+  }, 0);
+}
+
 // Analysis
+
 function runAnalysis() {
   if (!dsF || !dsM) return;
   $("runMsg").textContent = "";
   $("filterMsg").textContent = "";
   $("tbodyRes").innerHTML = "";
   $("plots").innerHTML = "";
+
+  __telemetry_last_ok = false;
+  __telemetry_last_snapshot = null;
 
   let filterFn = null;
   try {
@@ -940,6 +1060,18 @@ function runAnalysis() {
     priorM, priorF
   });
   $("runMsg").textContent = ""; // Clear error
+
+  // Telemetry snapshot (values written into CSV columns; everything else in meta JSON)
+  try {
+    const values = Object.create(null);
+    values[condCol] = Number.isFinite(condValueNative) ? condValueNative : "";
+    for (const r of rowsOut) {
+      // native numeric values for any measurement fields the user provided
+      values[r.field] = Number.isFinite(r.xNative) ? r.xNative : "";
+    }
+    __telemetry_last_snapshot = { values };
+    __telemetry_last_ok = true;
+  } catch { /* swallow */ }
 }
 
 // Plots
@@ -1331,7 +1463,7 @@ $("btnClearFields").addEventListener("click", () => {
   selected.clear();
   redrawSelectedFields();
 });
-$("btnRun").addEventListener("click", runAnalysis);
+$("btnRun").addEventListener("click", () => { runAnalysis(); queueTelemetrySend(); });
 
 $("btnSave").addEventListener("click", saveToLocalStorage);
 $("btnLoadSaved").addEventListener("click", loadFromLocalStorage);
