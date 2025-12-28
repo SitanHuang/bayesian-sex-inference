@@ -84,11 +84,11 @@
 
         <div class="control-group">
           <h2>1. Data Source</h2>
-          <label>Dataset Version</label>
+          <label>Dataset</label>
           <div class="row">
             <select id="selDataset" name="selDataset" class="col">
-              <option value="ANSUR_II" selected>ANSUR II</option>
-              <option value="ANSUR_I">ANSUR I</option>
+              <option value="ANSUR_II" selected>ANSUR II (2012)</option>
+              <option value="ANSUR_I">ANSUR I (1988)</option>
             </select>
           </div>
 
@@ -225,7 +225,7 @@ Operators: AND, OR, parentheses ()"></textarea>
           <div class="row" style="margin-top:8px;">
             <button type="button" id="btnSave" disabled class="btn-secondary btn-sm" style="flex:1;">Save Config to localStorage</button>
             <button type="button" id="btnLoadSaved" disabled class="btn-secondary btn-sm" style="flex:1;">Load Config from localStorage</button>
-            <button type="button" onclick="window.print()" class="btn-secondary btn-sm" style="flex:1;">Print PDF</button>
+            <button type="button" onclick="window.print()" class="btn-secondary btn-sm" style="flex:1;">Print Report PDF</button>
           </div>
           <div id="runMsg" class="sub-label" style="text-align:center; margin-top:5px;"></div>
         </div>
@@ -239,7 +239,7 @@ Operators: AND, OR, parentheses ()"></textarea>
         <header class="paper-header">
           <h1 class="paper-title">Bayesian Anthropometric Analysis</h1>
           <div class="paper-meta">
-            Generated using Conditional Gaussian Kernel Estimation + ANSUR Dataset
+            <!-- Generated using Conditional Gaussian Kernel Estimation + ANSUR Dataset -->
           </div>
           <div id="headerSummary" class="paper-meta" style="margin-top:8px; font-style:italic;">
             Dataset not loaded.
@@ -247,7 +247,7 @@ Operators: AND, OR, parentheses ()"></textarea>
         </header>
 
         <section id="res-posterior">
-          <div class="section-title">Ensemble Classification</div>
+          <div class="section-title">Ensemble Result</div>
           <div class="report-grid">
             <div>
               <div id="txtPosterior" style="font-size:14px; line-height:1.6;"></div>
@@ -258,7 +258,7 @@ Operators: AND, OR, parentheses ()"></textarea>
         </section>
 
         <section id="res-plots">
-          <div class="section-title">Conditional Distributions (Filtered)</div>
+          <div class="section-title">Conditional Distributions</div>
           <p style="font-size:11px; color:#666; margin-bottom:15px;">
             Plots represent the population distribution weighted by proximity to the conditioning variable (Kernel
             Density).
@@ -269,7 +269,7 @@ Operators: AND, OR, parentheses ()"></textarea>
         </section>
 
         <section id="res-table">
-          <div class="section-title">Statistical Appendix</div>
+          <div class="section-title">Appendix</div>
           <table class="data-table">
             <thead>
               <tr>
@@ -291,8 +291,7 @@ Operators: AND, OR, parentheses ()"></textarea>
             <strong>Methodology:</strong> Conditional statistics are computed using kernel weighting (Gaussian), where
             subjects with conditioning values (e.g., Stature) closer to the input contribute more to the distribution
             estimation.
-            Ensemble probability combines individual measurement likelihoods assuming conditional independence given the
-            conditioning variable.
+            Ensemble probability combines individual measurement likelihoods given the conditioning variable.
             Uncertainty bands are derived via Monte Carlo simulation of measurement error.
           </p>
         </footer>
