@@ -755,6 +755,7 @@ function rebuildFieldList() {
     const opt = document.createElement("option");
     opt.value = col;
     const meta = dsF.getMeta(col) || dsM.getMeta(col);
+    if (meta.dim == 'weight') continue;
     const suffix = meta ? `  [${meta.dim}:${meta.nativeUnit}]` : "";
     opt.textContent = col + suffix;
     $("selFields").appendChild(opt);
@@ -1063,18 +1064,18 @@ function normalizeStateForCompare(st) {
 
   return {
     dataset: norm(st.dataset),
-    condCol: norm(st.condCol),
-    condVal: norm(st.condVal),
-    condUnit: norm(st.condUnit),
-    bw: norm(st.bw),
-    bwUnit: norm(st.bwUnit),
-    priorM: norm(st.priorM),
+    // condCol: norm(st.condCol),
+    // condVal: norm(st.condVal),
+    // condUnit: norm(st.condUnit),
+    // bw: norm(st.bw),
+    // bwUnit: norm(st.bwUnit),
+    // priorM: norm(st.priorM),
     filter: norm(st.filter),
     selected: Array.isArray(st.selected) ? st.selected.map(it => ({
       field: norm(it.field),
       unitChoice: norm(it.unitChoice),
       valueText: norm(it.valueText),
-      uncText: norm(it.uncText),
+      // uncText: norm(it.uncText),
       weight: num(it.weight)
     })) : []
   };
