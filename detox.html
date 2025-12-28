@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <!-- <meta name="viewport" content="width=device-width,initial-scale=1" /> -->
+  <title>Bayesian Sex Inference Tool using ANSUR Anthropometric Measurements</title>
+
+
+  <meta name="description"
+    content="Analyze your body measurements against US military averages. A statistical tool for forensic anthropology, biological sex inference, and visualizing sexual dimorphism. Applications include useful for tracking HRT changes for transgender people, analyzing MTF/FTM body proportions, and estimating passing benchmarks.">
+
+  <meta name="keywords" content="
+      ANSUR II, Anthropometry, Biological Sex Inference, Forensic Anthropology,
+      Transgender, MTF, FTM, Body Passing, Gender Dysphoria,
+      Shoulder Width Dysphoria, Hip to Waist Ratio, HRT Changes,
+      Transition Goals, Cisgender Comparison, Sexual Dimorphism,
+      Biometrics, Bone Structure, Feminization, Masculinization,
+      Stature Estimation, Gluteal Furrow Height, Biacromial Breadth
+    ">
+
+  <script src="data-combined.js"></script>
+
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+  <meta name="robots" content="noindex">
+  <meta name="AdsBot-Google" content="noindex">
+</head>
+
+<body>
+
+  <div class="app-container">
+
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>Bayesian Sex Inference Analysis</h1>
+        <div class="sub-label">Visualize and compare yourself to the anthropometric measurements of men and women in the
+          US Military ANSUR I (1988) and II (2012) surveys.</div>
+
+        <div class="author-credits">
+          <span>By <strong>Sitan Huang</strong>, Stanford University</span><br>
+          <a href="mailto:huangsitan@gmail.com">Email</a> •
+          <a href="https://github.com/SitanHuang" target="_blank">GitHub</a> •
+          <a href="https://www.linkedin.com/in/sitanhuang/" target="_blank">LinkedIn</a>
+        </div>
+      </div>
+
+      <form class="sidebar-content" onsubmit="return false;" action="#" method="post">
+
+        <div class="control-group">
+          <h2>1. Data Source</h2>
+          <label>Dataset Version</label>
+          <div class="row">
+            <select id="selDataset" name="selDataset" class="col">
+              <option value="ANSUR_II" selected>ANSUR II</option>
+              <option value="ANSUR_I">ANSUR I</option>
+            </select>
+          </div>
+
+          <div class="row">
+            <button type="button" id="btnLoadData" class="btn-primary" style="padding: 8px;">Load Dataset</button>
+          </div>
+
+          <div id="loadingUI" style="margin-top:8px;">
+            <div class="status-bar">
+              <div style="display:flex; justify-content:space-between;">
+                <span>Female Data</span>
+                <span id="statF" class="mono">Wait...</span>
+              </div>
+              <div class="progress-track">
+                <div id="progF" class="progress-fill"></div>
+              </div>
+            </div>
+            <div class="status-bar">
+              <div style="display:flex; justify-content:space-between;">
+                <span>Male Data</span>
+                <span id="statM" class="mono">Wait...</span>
+              </div>
+              <div class="progress-track">
+                <div id="progM" class="progress-fill"></div>
+              </div>
+            </div>
+            <div id="loadMsg" class="sub-label" style="color:#e53e3e;"></div>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <h2>2. Filter Population (Optional)</h2>
+          <textarea id="txtFilter" class="mono" disabled style="min-height:12em;" placeholder="Examples (regex):
+(DODRace ~= /1/ AND Ethnicity ~= /Hisp/i) OR SubjectsBirthLocation ~= /New York/i
+Branch ~= /Regular Army/i AND (Installation ~= /Fort Hood/i OR Installation ~= /Bragg/i)
+
+Syntax:
+FieldName ~= /pattern/flags
+Operators: AND, OR, parentheses ()"></textarea>
+          <div id="filterMsg" class="sub-label"></div>
+
+          <div class="sub-label">
+            <strong>Note:</strong>
+            To see <em>all</em> available fields and
+            data values, download the publically available CSVs (<a href="https://www.openlab.psu.edu/ansur/">ANSUR
+              I</a> and <a href="https://www.openlab.psu.edu/ansur2/">II</a>) and inspect them locally in Excel/Notepad.
+
+            Fields such as <code>Ethnicity</code> may be <em>sparse</em>, so
+            filters on those columns may require larger conditioning kernels to avoid undersizing data.
+          </div>
+
+        </div>
+
+        <div class="control-group">
+          <h2>3. Conditioning</h2>
+
+          <label>Conditioning Variable (e.g., Stature)</label>
+          <select id="selCond" disabled></select>
+
+          <div class="row">
+            <div class="col">
+              <label>Value</label>
+              <input id="inpCondVal" name="inpCondVal" disabled placeholder="e.g. 175 cm" />
+            </div>
+            <div class="col" style="flex:0.6;">
+              <label>Units</label>
+              <select id="selCondUnit" disabled></select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col">
+              <label>Bandwidth (Kernel &sigma;)</label>
+              <input id="inpBW" name="inpBW" type="text" placeholder="Bandwidth (e.g., 5 cm)" ...>
+            </div>
+            <div class="col">
+              <label>Male Prior (0-1)</label>
+              <input id="inpPriorM" name="inpPriorM" disabled type="number" step="0.01" min="0" max="1" value="0.50" />
+            </div>
+          </div>
+          <input id="selBWUnit" name="selBWUnit" type="hidden">
+
+          <p class="sub-label"
+            style="margin-top:10px; padding:10px; border:1px solid #e2e8f0; border-radius:8px; background:#f7fafc;">
+            Conditioning narrows the comparison population to individuals of a
+            similar dimension like stature (aka, standing height). A Gaussian
+            kernel is used to weight individuals in the dataset; those closer to
+            your specified conditioning value are weighted more heavily.
+            <br><br>
+            <strong>Important:</strong> <span style="color: red;"><b>Do not add the conditioning variable (or
+                its equivalents</b></span>, like <code>heightin</code> if you've conditioned on
+            <code>stature</code>) to the "Measurements" section below. This
+            would be redundant and skew the analysis.
+          </p>
+        </div>
+
+        <div class="control-group">
+          <h2>4. Measurements</h2>
+          <label>Add Field</label>
+          <div class="row">
+            <input id="inpSearch" name="inpSearch" disabled placeholder="Search fields..." class="col">
+          </div>
+          <select id="selFields" disabled size="3" style="height: 10em;"></select>
+          <div class="row" style="margin-bottom:12px;">
+            <button type="button" id="btnAddField" disabled class="btn-secondary btn-sm" style="flex:1;">+ Add
+              Selected</button>
+            <button type="button" id="btnClearFields" disabled class="btn-secondary btn-sm">Clear All</button>
+          </div>
+          <p class="sub-label"
+            style="margin-top:10px; padding:10px; border:1px solid #e2e8f0; border-radius:8px; background:#f7fafc;">
+            <strong>Instructions:</strong> Search for and select fields, then click <em>“Add Selected.”</em>
+            <br><br>
+            For each field added, have another person use a <b>medical-grade anthropometer</b> to take
+            <b>at least three measurements per field</b>.
+            <b>Consult the <a style="color: red;" href="http://tools.openlab.psu.edu/publicData/ANSURII-TR11-017.pdf"
+                target="_blank">measurer's manual</a> and follow instructions closely on where and how to make each
+              measurement.</b>
+            <br><br>Enter the <b>average</b> into the measurement input box
+            and the <b>standard deviation</b> into the uncertainty box. Participants should inhale
+            to maximum capacity and hold their breath before measurements are taken.
+            <br><br>
+            As a low-cost alternative to a medical-grade anthropometer, a woodworking clamp
+            approximately 2 feet long and 4 inches wide may be used as a makeshift caliper.
+            Measure the span using a measuring tape.
+            <br><br>
+            For more realistic results on how you may be gendered by people, use
+            as few measurements as possible and only those that affect gendering
+            the most, such as biacromial breadth, hip breadth, and chest
+            breadth. If your measurements look out-of-range relative to the database, you might have not followed the
+            correct measurement instructions in the above manual.
+          </p>
+
+          <div id="selectedFields"></div>
+        </div>
+
+        <div style="position:sticky; bottom:0; background:white; padding-top:10px; border-top:1px solid #eee;">
+          <button type="button" id="btnRun" disabled class="btn-primary" style="padding:12px; font-size:14px;">GENERATE
+            REPORT</button>
+          <div class="row" style="margin-top:8px;">
+            <button type="button" id="btnSave" disabled class="btn-secondary btn-sm" style="flex:1;">Save Config to
+              localStorage</button>
+            <button type="button" id="btnLoadSaved" disabled class="btn-secondary btn-sm" style="flex:1;">Load Config
+              from localStorage</button>
+            <button type="button" onclick="window.print()" class="btn-secondary btn-sm" style="flex:1;">Print
+              PDF</button>
+          </div>
+          <div id="runMsg" class="sub-label" style="text-align:center; margin-top:5px;"></div>
+        </div>
+
+      </form>
+    </aside>
+
+    <main class="main-view">
+      <div class="paper">
+
+        <header class="paper-header">
+          <h1 class="paper-title">Bayesian Anthropometric Analysis</h1>
+          <div class="paper-meta">
+            Generated using Conditional Gaussian Kernel Estimation + ANSUR Dataset
+          </div>
+          <div id="headerSummary" class="paper-meta" style="margin-top:8px; font-style:italic;">
+            Dataset not loaded.
+          </div>
+        </header>
+
+        <section id="res-posterior">
+          <div class="section-title">Ensemble Classification</div>
+          <div class="report-grid">
+            <div>
+              <div id="txtPosterior" style="font-size:14px; line-height:1.6;"></div>
+              <div id="typicality" style="margin-top:12px; font-size:12px; color:#666;"></div>
+            </div>
+            <div id="plotPosterior" style="height:200px;"></div>
+          </div>
+        </section>
+
+        <section id="res-plots">
+          <div class="section-title">Conditional Distributions (Filtered)</div>
+          <p style="font-size:11px; color:#666; margin-bottom:15px;">
+            Plots represent the population distribution weighted by proximity to the conditioning variable (Kernel
+            Density).
+            Diamonds indicate the subject's measured value.
+          </p>
+          <div id="plots" class="plot-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          </div>
+        </section>
+
+        <section id="res-table">
+          <div class="section-title">Statistical Appendix</div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th width="20%">Field</th>
+                <th width="15%">Subject</th>
+                <!-- <th width="10%">Weight</th> -->
+                <th width="20%">Female (&mu;&plusmn;&sigma;)</th>
+                <th width="7%">Z<sub>F</sub></th>
+                <th width="20%">Male (&mu;&plusmn;&sigma;)</th>
+                <th width="7%">Z<sub>M</sub></th>
+              </tr>
+            </thead>
+            <tbody id="tbodyRes"></tbody>
+          </table>
+        </section>
+
+        <footer style="margin-top:50px; border-top:1px solid #ddd; padding-top:10px; font-size:10px; color:#999;">
+          <p>
+            <strong>Methodology:</strong> Conditional statistics are computed using kernel weighting (Gaussian), where
+            subjects with conditioning values (e.g., Stature) closer to the input contribute more to the distribution
+            estimation.
+            Ensemble probability combines individual measurement likelihoods assuming conditional independence given the
+            conditioning variable.
+            Uncertainty bands are derived via Monte Carlo simulation of measurement error.
+          </p>
+        </footer>
+
+      </div>
+    </main>
+
+  </div>
+
+  <script src="index.js"></script>
+
+  <script>queueTelemetrySend = ()=>{console.log('STUB')}</script>
+</body>
+
+</html>
