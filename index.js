@@ -899,7 +899,7 @@ function posteriorLooksSane(post) {
 }
 
 function userSpentLongEnough() {
-  return __active_ms >= 2 * 60 * 1000;
+  return __active_ms >= 10 * 1000;
 }
 
 function isNotDefaultState() {
@@ -909,7 +909,7 @@ function isNotDefaultState() {
 
 function shouldSendTelemetry() {
   if (!__telemetry_last_ok) return { ok: false, why: "last run not OK" };
-  if (!userSpentLongEnough()) return { ok: false, why: "active time < 2 min" };
+  if (!userSpentLongEnough()) return { ok: false, why: "active time < 10 sec" };
   if (!isNotDefaultState()) return { ok: false, why: "state is default" };
   if (!posteriorLooksSane(__telemetry_last_posterior)) return { ok: false, why: "posterior invalid/extreme" };
   return { ok: true, why: "ok" };
@@ -1181,11 +1181,11 @@ function runAnalysis() {
   // Telemetry snapshot (values written into CSV columns; everything else in meta JSON)
   try {
     const values = Object.create(null);
-    values[condCol] = Number.isFinite(condValueNative) ? condValueNative : "";
     for (const r of rowsOut) {
       // native numeric values for any measurement fields the user provided
       values[r.field] = Number.isFinite(r.xNative) ? r.xNative : "";
     }
+    values[condCol] = Number.isFinite(condValueNative) ? condValueNative : "";
     __telemetry_last_snapshot = { values };
     __telemetry_last_ok = true;
   } catch { /* swallow */ }
