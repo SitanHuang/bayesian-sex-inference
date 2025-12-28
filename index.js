@@ -707,11 +707,13 @@ function applyDefaultInputsForANSUR2() {
   $("inpCondVal").value = "169.5 cm";
   $("inpPriorM").value = "0.50";
   const defaults = [
-    ["biacromialbreadth", "38.65 cm", "0.2 cm", 1.0],
-    ["chestbreadth", "28.2 cm", "0.1 cm", 1.0],
-    ["waistbreadth", "28.1 cm", "0.1 cm", 1.0],
-    ["waistcircumference", "76.5 cm", "1 cm", 1.0],
-    ["hipbreadth", "32.6 cm", "0.6 cm", 1.0],
+    ["biacromialbreadth", "38.7 cm", "0.1 cm", 1.0],
+    ["chestbreadth", "28.2 cm", "0.2 cm", 1.0],
+    ["waistbreadth", "28.1 cm", "0.4 cm", 1.0],
+    ["waistcircumference", "76.5 cm", "1.5 cm", 1.0],
+    ["hipbreadth", "32.4 cm", "0.4 cm", 1.0],
+    ["footlength", "24.0 cm", "0.2 cm", 1.0],
+    ["handlength", "18.0 cm", "0.2 cm", 1.0],
   ];
   selected.clear();
   for (const [field, val, unc, w] of defaults) {
