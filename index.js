@@ -1,9 +1,6 @@
-
-
 const $ = (id) => document.getElementById(id);
 const fmt = (x, d = 3) => (Number.isFinite(x) ? x.toFixed(d) : "—");
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
-
 
 function erf(x) {
   const sign = x < 0 ? -1 : 1;
@@ -77,6 +74,141 @@ function gammaP(s, x) {
 function chiSquareCdf(x, k) {
   if (!(x >= 0) || !(k > 0)) return NaN;
   return gammaP(k / 2, x / 2);
+}
+
+// ---- Correlated (multivariate Gaussian) helpers ----
+function choleskyDecompose(A, n) {
+  const L = new Float64Array(n * n);
+  const eps = 1e-14;
+
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j <= i; j++) {
+      let sum = A[i * n + j];
+      for (let k = 0; k < j; k++) sum -= L[i * n + k] * L[j * n + k];
+
+      if (i === j) {
+        if (!(sum > eps)) return null;
+        L[i * n + j] = Math.sqrt(sum);
+      } else {
+        const ljj = L[j * n + j];
+        if (!(ljj > 0)) return null;
+        L[i * n + j] = sum / ljj;
+      }
+    }
+  }
+  return L;
+}
+
+function choleskyFromCov(cov, n, extraDiag, opts = {}) {
+  const maxIter = opts.maxIter ?? 8;
+  const baseJitterRel = opts.baseJitterRel ?? 1e-9;
+
+  const A = new Float64Array(cov); // copy
+  let tr = 0;
+  for (let i = 0; i < n; i++) tr += A[i * n + i];
+  const scale = (tr > 0 ? (tr / n) : 1);
+
+  if (extraDiag && extraDiag.length === n) {
+    for (let i = 0; i < n; i++) A[i * n + i] += extraDiag[i];
+  }
+
+  let jitter = 0;
+  for (let iter = 0; iter < maxIter; iter++) {
+    const L = choleskyDecompose(A, n);
+    if (L) {
+      let logDet = 0;
+      for (let i = 0; i < n; i++) logDet += Math.log(L[i * n + i]);
+      logDet *= 2;
+      return { ok: true, L, logDet, jitter };
+    }
+
+    jitter = (jitter === 0 ? (scale * baseJitterRel) : jitter * 10);
+    for (let i = 0; i < n; i++) A[i * n + i] += jitter;
+  }
+
+  return { ok: false, L: null, logDet: NaN, jitter };
+}
+
+function mvnLogPdfChol(x, mean, L, logDet) {
+  const n = x.length;
+  const y = new Float64Array(n);
+
+  for (let i = 0; i < n; i++) {
+    let sum = x[i] - mean[i];
+    for (let j = 0; j < i; j++) sum -= L[i * n + j] * y[j];
+    y[i] = sum / L[i * n + i];
+  }
+
+  let quad = 0;
+  for (let i = 0; i < n; i++) quad += y[i] * y[i];
+
+  const log2pi = Math.log(2 * Math.PI);
+  const logpdf = -0.5 * (n * log2pi + logDet + quad);
+  return { logpdf, quad };
+}
+
+function weightedMeanCovMatrix(valsList, weights) {
+  const k = valsList.length;
+  if (k <= 0) return { ok: false };
+
+  const n = weights.length;
+  const mean = new Float64Array(k);
+  let sw = 0, sw2 = 0, count = 0;
+
+  for (let i = 0; i < n; i++) {
+    const w = weights[i];
+    if (!(w > 0)) continue;
+
+    let okRow = true;
+    for (let j = 0; j < k; j++) {
+      const x = valsList[j][i];
+      if (!Number.isFinite(x)) { okRow = false; break; }
+    }
+    if (!okRow) continue;
+
+    sw += w;
+    sw2 += w * w;
+    count++;
+
+    for (let j = 0; j < k; j++) mean[j] += w * valsList[j][i];
+  }
+
+  if (!(sw > 0) || count < (k + 8)) return { ok: false, sw, sw2, count };
+
+  for (let j = 0; j < k; j++) mean[j] /= sw;
+
+  const cov = new Float64Array(k * k);
+
+  for (let i = 0; i < n; i++) {
+    const w = weights[i];
+    if (!(w > 0)) continue;
+
+    let okRow = true;
+    for (let j = 0; j < k; j++) {
+      const x = valsList[j][i];
+      if (!Number.isFinite(x)) { okRow = false; break; }
+    }
+    if (!okRow) continue;
+
+    for (let a = 0; a < k; a++) {
+      const da = valsList[a][i] - mean[a];
+      for (let b = 0; b <= a; b++) {
+        const db = valsList[b][i] - mean[b];
+        cov[a * k + b] += w * da * db;
+      }
+    }
+  }
+
+  for (let a = 0; a < k; a++) {
+    for (let b = 0; b <= a; b++) {
+      const v = cov[a * k + b] / sw;
+      cov[a * k + b] = v;
+      cov[b * k + a] = v;
+    }
+  }
+
+  const nEff = (sw2 > 0) ? (sw * sw) / sw2 : 0;
+  return { ok: true, mean, cov, sw, sw2, count, nEff };
 }
 
 
@@ -1272,8 +1404,11 @@ function runAnalysis() {
 
   const priorM = clamp01(Number($("inpPriorM").value));
   const priorF = 1 - priorM;
-  let logLikM = Math.log(Math.max(1e-12, priorM));
-  let logLikF = Math.log(Math.max(1e-12, priorF));
+  const logPriorM = Math.log(Math.max(1e-12, priorM));
+  const logPriorF = Math.log(Math.max(1e-12, priorF));
+
+  let logLikM = logPriorM;
+  let logLikF = logPriorF;
   let chi2M = 0, chi2F = 0;
   let kUsed = 0;
 
@@ -1319,6 +1454,69 @@ function runAnalysis() {
 
   if (!rowsOut.length) { $("runMsg").textContent = "No valid values."; return; }
 
+  // ---- Correlated model override (when enough data exists) ----
+  let modelLabel = "Naive Bayes (insufficient data for multivariate Gaussian)";
+  let corrCtx = null;
+
+  const corrRows = rowsOut
+    .filter(r =>
+      r.sF.ok && r.sM.ok &&
+      (r.sF.sd > 0) && (r.sM.sd > 0) &&
+      Number.isFinite(r.xNative) &&
+      (Number(r.wField ?? 1) > 0) &&
+      Math.abs(Number(r.wField ?? 1) - 1) < 1e-9
+    );
+
+  const MIN_EFF_COV = 60;
+
+  if (corrRows.length >= 2) {
+    const k = corrRows.length;
+    const valsListF = corrRows.map(r => r.valsF);
+    const valsListM = corrRows.map(r => r.valsM);
+    const u2 = new Float64Array(k);
+    const xVec = new Float64Array(k);
+
+    for (let i = 0; i < k; i++) {
+      const u = Number(corrRows[i].uNative ?? 0);
+      u2[i] = (u > 0) ? (u * u) : 0;
+      xVec[i] = corrRows[i].xNative;
+    }
+
+    const baseF = weightedMeanCovMatrix(valsListF, weightsF.w);
+    const baseM = weightedMeanCovMatrix(valsListM, weightsM.w);
+
+    if (baseF.ok && baseM.ok && (baseF.nEff >= MIN_EFF_COV) && (baseM.nEff >= MIN_EFF_COV)) {
+      const cholDataF = choleskyFromCov(baseF.cov, k, null);
+      const cholDataM = choleskyFromCov(baseM.cov, k, null);
+
+      // Point-estimate uses Σ + diag(u^2)
+      const cholEffF = choleskyFromCov(baseF.cov, k, u2);
+      const cholEffM = choleskyFromCov(baseM.cov, k, u2);
+
+      if (cholDataF.ok && cholDataM.ok && cholEffF.ok && cholEffM.ok) {
+        const mvF = mvnLogPdfChol(xVec, baseF.mean, cholEffF.L, cholEffF.logDet);
+        const mvM = mvnLogPdfChol(xVec, baseM.mean, cholEffM.L, cholEffM.logDet);
+
+        logLikF = logPriorF + mvF.logpdf;
+        logLikM = logPriorM + mvM.logpdf;
+
+        chi2F = mvF.quad;
+        chi2M = mvM.quad;
+        kUsed = k;
+
+        modelLabel = "Correlated (multivariate Gaussian)";
+        corrCtx = {
+          mode: "mvn",
+          k,
+          xVec,
+          uVec: new Float64Array(corrRows.map(r => Number(r.uNative ?? 0))),
+          F: { mean: baseF.mean, L: cholDataF.L, logDet: cholDataF.logDet },
+          M: { mean: baseM.mean, L: cholDataM.L, logDet: cholDataM.logDet }
+        };
+      }
+    }
+  }
+
   const lse = logSumExp(logLikM, logLikF);
   const pM = Math.exp(logLikM - lse);
   const pF = Math.exp(logLikF - lse);
@@ -1341,7 +1539,8 @@ function runAnalysis() {
   $("headerSummary").innerHTML =
     `Conditioning: <strong>${condCol}</strong> @ ${fmt(condValueDisplay, 3)} ${condDisplayUnit} ` +
     `(Bandwidth: ${fmt(bwDisplay, 3)} ${condDisplayUnit}) <br>` +
-    `Effective Sample (Kernel): F≈${fmt(weightsF.nEff, 1)}, M≈${fmt(weightsM.nEff, 1)}` +
+    `Effective Sample (Kernel): F≈${fmt(weightsF.nEff, 1)}, M≈${fmt(weightsM.nEff, 1)} · ` +
+    `Model: <strong>${modelLabel}</strong>` +
     filterWarning;
 
   // Typicality
@@ -1352,7 +1551,7 @@ function runAnalysis() {
       `Mahalanobis Typicality (χ², df=${kUsed}): <strong class="text-female">Female ${fmt(typF, 1)}%</strong> · <strong class="text-male">Male ${fmt(typM, 1)}%</strong>`;
   }
 
-  renderPosteriorPlot({ pM, pF, priorM, priorF, rowsOut, kUsed });
+  renderPosteriorPlot({ pM, pF, priorM, priorF, rowsOut, kUsed, corrCtx });
 
   // Table
   const tbody = $("tbodyRes");
@@ -1407,23 +1606,51 @@ function quantile(sorted, q) {
   return sorted[i] + f * (sorted[Math.min(sorted.length - 1, i + 1)] - sorted[i]);
 }
 
-function renderPosteriorPlot({ pM, pF, priorM, priorF, rowsOut, kUsed }) {
+function renderPosteriorPlot({ pM, pF, priorM, priorF, rowsOut, kUsed, corrCtx }) {
   const N = 600;
   const samples = [];
-  for (let t = 0; t < N; t++) {
-    let llM = Math.log(Math.max(1e-12, priorM));
-    let llF = Math.log(Math.max(1e-12, priorF));
-    for (const r of rowsOut) {
-      if (!r.sF.ok || !r.sM.ok || !(r.sF.sd > 0) || !(r.sM.sd > 0)) continue;
-      const wField = Math.max(0, r.wField);
-      if (wField === 0) continue;
-      const xSamp = r.uNative > 0 ? (r.xNative + r.uNative * randn()) : r.xNative;
-      llF += wField * logNormalPdf(xSamp, r.sF.mean, r.sF.sd);
-      llM += wField * logNormalPdf(xSamp, r.sM.mean, r.sM.sd);
+
+  if (corrCtx && corrCtx.mode === "mvn" && corrCtx.k >= 2) {
+    const k = corrCtx.k;
+    const x0 = corrCtx.xVec;
+    const u = corrCtx.uVec;
+
+    for (let t = 0; t < N; t++) {
+      let llM = Math.log(Math.max(1e-12, priorM));
+      let llF = Math.log(Math.max(1e-12, priorF));
+
+      const xSamp = new Float64Array(k);
+      for (let i = 0; i < k; i++) {
+        const ui = u[i];
+        xSamp[i] = (ui > 0) ? (x0[i] + ui * randn()) : x0[i];
+      }
+
+      const mM = mvnLogPdfChol(xSamp, corrCtx.M.mean, corrCtx.M.L, corrCtx.M.logDet);
+      const mF = mvnLogPdfChol(xSamp, corrCtx.F.mean, corrCtx.F.L, corrCtx.F.logDet);
+
+      llM += mM.logpdf;
+      llF += mF.logpdf;
+
+      const lse = logSumExp(llM, llF);
+      samples.push(Math.exp(llM - lse));
     }
-    const lse = logSumExp(llM, llF);
-    samples.push(Math.exp(llM - lse));
+  } else {
+    for (let t = 0; t < N; t++) {
+      let llM = Math.log(Math.max(1e-12, priorM));
+      let llF = Math.log(Math.max(1e-12, priorF));
+      for (const r of rowsOut) {
+        if (!r.sF.ok || !r.sM.ok || !(r.sF.sd > 0) || !(r.sM.sd > 0)) continue;
+        const wField = Math.max(0, r.wField);
+        if (wField === 0) continue;
+        const xSamp = r.uNative > 0 ? (r.xNative + r.uNative * randn()) : r.xNative;
+        llF += wField * logNormalPdf(xSamp, r.sF.mean, r.sF.sd);
+        llM += wField * logNormalPdf(xSamp, r.sM.mean, r.sM.sd);
+      }
+      const lse = logSumExp(llM, llF);
+      samples.push(Math.exp(llM - lse));
+    }
   }
+
   samples.sort((a, b) => a - b);
   const lo = quantile(samples, 0.05);
   const hi = quantile(samples, 0.95);
