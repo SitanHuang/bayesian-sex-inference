@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bayesian Sex Inference Tool using ANSUR Anthropometric Measurements</title>
+
+  <script src="data-combined.js"></script>
+
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-HT7F063TYK"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+
+    gtag('config', 'G-HT7F063TYK');
+  </script>
+</head>
+
+<body>
+
+  <div class="app-container">
+
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>Bayesian Sex Inference Analysis</h1>
+        <div class="sub-label">Visualize and compare yourself to the anthropometric measurements of men and women in the US Military ANSUR I (1988) and II (2012) surveys.</div>
+
+        <div class="author-credits">
+          <span>By <strong>Sitan Huang</strong>, Stanford University</span><br>
+          <a href="mailto:huangsitan@gmail.com">Email</a> •
+          <a href="https://github.com/SitanHuang" target="_blank">GitHub</a> •
+          <a href="https://www.linkedin.com/in/sitanhuang/" target="_blank">LinkedIn</a>
+        </div>
+      </div>
+
+      <form class="sidebar-content" onsubmit="return false;" action="#" method="post">
+
+        <div class="control-group">
+          <h2>1. Data Source</h2>
+          <label>Dataset Version</label>
+          <div class="row">
+            <select id="selDataset" name="selDataset" class="col">
+              <option value="ANSUR_II" selected>ANSUR II</option>
+              <option value="ANSUR_I">ANSUR I</option>
+            </select>
+            <button type="button" id="btnLoadData" class="btn-secondary btn-sm">Load</button>
+          </div>
+
+          <div id="loadingUI" style="margin-top:8px;">
+            <div class="status-bar">
+              <div style="display:flex; justify-content:space-between;">
+                <span>Female Data</span>
+                <span id="statF" class="mono">Wait...</span>
+              </div>
+              <div class="progress-track">
+                <div id="progF" class="progress-fill"></div>
+              </div>
+            </div>
+            <div class="status-bar">
+              <div style="display:flex; justify-content:space-between;">
+                <span>Male Data</span>
+                <span id="statM" class="mono">Wait...</span>
+              </div>
+              <div class="progress-track">
+                <div id="progM" class="progress-fill"></div>
+              </div>
+            </div>
+            <div id="loadMsg" class="sub-label" style="color:#e53e3e;"></div>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <h2>2. Filter Population (Optional)</h2>
+          <textarea id="txtFilter" class="mono" disabled style="min-height:12em;" placeholder="Examples (regex):
+(DODRace ~= /1/ AND Ethnicity ~= /Hisp/i) OR SubjectsBirthLocation ~= /New York/i
+Branch ~= /Regular Army/i AND (Installation ~= /Fort Hood/i OR Installation ~= /Bragg/i)
+
+Syntax:
+FieldName ~= /pattern/flags
+Operators: AND, OR, parentheses ()"></textarea>
+          <div id="filterMsg" class="sub-label"></div>
+        </div>
+
+        <div class="control-group">
+          <h2>3. Conditioning</h2>
+
+          <label>Conditioning Variable (e.g., Stature)</label>
+          <select id="selCond" disabled></select>
+
+          <div class="row">
+            <div class="col">
+              <label>Value</label>
+              <input id="inpCondVal" name="inpCondVal" disabled placeholder="e.g. 175 cm" />
+            </div>
+            <div class="col" style="flex:0.6;">
+              <label>Units</label>
+              <select id="selCondUnit" disabled></select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col">
+              <label>Bandwidth (Kernel &sigma;)</label>
+              <input id="inpBW" name="inpBW" type="text" placeholder="Bandwidth (e.g., 5 cm)" ...>
+            </div>
+            <div class="col">
+              <label>Male Prior (0-1)</label>
+              <input id="inpPriorM" name="inpPriorM" disabled type="number" step="0.01" min="0" max="1" value="0.50" />
+            </div>
+          </div>
+          <input id="selBWUnit" name="selBWUnit" type="hidden">
+        </div>
+
+        <div class="control-group">
+          <h2>4. Measurements</h2>
+          <label>Add Field</label>
+          <div class="row">
+            <input id="inpSearch" name="inpSearch" disabled placeholder="Search fields..." class="col">
+          </div>
+          <select id="selFields" disabled size="3" style="height: 10em;"></select>
+          <div class="row" style="margin-bottom:12px;">
+            <button type="button" id="btnAddField" disabled class="btn-secondary btn-sm" style="flex:1;">+ Add Selected</button>
+            <button type="button" id="btnClearFields" disabled class="btn-secondary btn-sm">Clear All</button>
+          </div>
+          <p class="sub-label"><strong>Instructions: </strong> Search and select fields, and click "Add Selected". For each field added, use a medical-grade anthropometer to measure at least 3 times; input the average into the measurement input box and the standard deviation into the uncertainty box.</p>
+
+          <div id="selectedFields"></div>
+        </div>
+
+        <div style="position:sticky; bottom:0; background:white; padding-top:10px; border-top:1px solid #eee;">
+          <button type="button" id="btnRun" disabled class="btn-primary" style="padding:12px; font-size:14px;">GENERATE
+            REPORT</button>
+          <div class="row" style="margin-top:8px;">
+            <button type="button" id="btnSave" disabled class="btn-secondary btn-sm" style="flex:1;">Save to localStorage</button>
+            <button type="button" id="btnLoadSaved" disabled class="btn-secondary btn-sm" style="flex:1;">Load from localStorage</button>
+            <button type="button" onclick="window.print()" class="btn-secondary btn-sm" style="flex:1;">Print PDF</button>
+          </div>
+          <div id="runMsg" class="sub-label" style="text-align:center; margin-top:5px;"></div>
+        </div>
+
+      </form>
+    </aside>
+
+    <main class="main-view">
+      <div class="paper">
+
+        <header class="paper-header">
+          <h1 class="paper-title">Bayesian Anthropometric Analysis</h1>
+          <div class="paper-meta">
+            Generated using Conditional Gaussian Kernel Estimation + ANSUR Dataset
+          </div>
+          <div id="headerSummary" class="paper-meta" style="margin-top:8px; font-style:italic;">
+            Dataset not loaded.
+          </div>
+        </header>
+
+        <section id="res-posterior">
+          <div class="section-title">Ensemble Classification</div>
+          <div class="report-grid">
+            <div>
+              <div id="txtPosterior" style="font-size:14px; line-height:1.6;"></div>
+              <div id="typicality" style="margin-top:12px; font-size:12px; color:#666;"></div>
+            </div>
+            <div id="plotPosterior" style="height:200px;"></div>
+          </div>
+        </section>
+
+        <section id="res-plots">
+          <div class="section-title">Conditional Distributions (Filtered)</div>
+          <p style="font-size:11px; color:#666; margin-bottom:15px;">
+            Plots represent the population distribution weighted by proximity to the conditioning variable (Kernel
+            Density).
+            Diamonds indicate the subject's measured value.
+          </p>
+          <div id="plots" class="plot-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          </div>
+        </section>
+
+        <section id="res-table">
+          <div class="section-title">Statistical Appendix</div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th width="20%">Field</th>
+                <th width="15%">Subject</th>
+                <!-- <th width="10%">Weight</th> -->
+                <th width="20%">Female (&mu;&plusmn;&sigma;)</th>
+                <th width="7%">Z<sub>F</sub></th>
+                <th width="20%">Male (&mu;&plusmn;&sigma;)</th>
+                <th width="7%">Z<sub>M</sub></th>
+              </tr>
+            </thead>
+            <tbody id="tbodyRes"></tbody>
+          </table>
+        </section>
+
+        <footer style="margin-top:50px; border-top:1px solid #ddd; padding-top:10px; font-size:10px; color:#999;">
+          <p>
+            <strong>Methodology:</strong> Conditional statistics are computed using kernel weighting (Gaussian), where
+            subjects with conditioning values (e.g., Stature) closer to the input contribute more to the distribution
+            estimation.
+            Ensemble probability combines individual measurement likelihoods assuming conditional independence given the
+            conditioning variable.
+            Uncertainty bands are derived via Monte Carlo simulation of measurement error.
+          </p>
+        </footer>
+
+      </div>
+    </main>
+
+  </div>
+
+  <script src="index.js"></script>
+</body>
+
+</html>
