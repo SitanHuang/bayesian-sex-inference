@@ -761,6 +761,8 @@ async function loadDatasetFromWindow(which) {
     if (which === "ANSUR_II") {
       applyDefaultInputsForANSUR2();
     }
+
+    __telemetry_baseline_state = currentState();
   } catch (e) {
     $("loadMsg").textContent = String(e.message || e);
     $("headerSummary").textContent = "Dataset load failed.";
@@ -836,6 +838,83 @@ async function captureWindowPngBlob() {
   return await new Promise((res) => canvas.toBlob(res, "image/png", 0.9));
 }
 
+function normalizeStateForCompare(st) {
+  if (!st || typeof st !== "object") return null;
+  const norm = (s) => String(s ?? "").trim().replace(/\s+/g, " ");
+  const num = (s) => {
+    const x = Number(String(s ?? "").trim());
+    return Number.isFinite(x) ? x : null;
+  };
+
+  return {
+    dataset: norm(st.dataset),
+    condCol: norm(st.condCol),
+    condVal: norm(st.condVal),
+    condUnit: norm(st.condUnit),
+    bw: norm(st.bw),
+    bwUnit: norm(st.bwUnit),
+    priorM: norm(st.priorM),
+    filter: norm(st.filter),
+    selected: Array.isArray(st.selected) ? st.selected.map(it => ({
+      field: norm(it.field),
+      unitChoice: norm(it.unitChoice),
+      valueText: norm(it.valueText),
+      uncText: norm(it.uncText),
+      weight: num(it.weight)
+    })) : []
+  };
+}
+
+function stableStringify(obj) {
+  // Simple stable stringify for objects/arrays (keys sorted)
+  const seen = new WeakSet();
+  const rec = (x) => {
+    if (x == null) return "null";
+    if (typeof x !== "object") return JSON.stringify(x);
+    if (seen.has(x)) return '"[Circular]"';
+    seen.add(x);
+
+    if (Array.isArray(x)) return "[" + x.map(rec).join(",") + "]";
+    const keys = Object.keys(x).sort();
+    return "{" + keys.map(k => JSON.stringify(k) + ":" + rec(x[k])).join(",") + "}";
+  };
+  return rec(obj);
+}
+
+function stateEquals(a, b) {
+  return stableStringify(normalizeStateForCompare(a)) === stableStringify(normalizeStateForCompare(b));
+}
+
+function posteriorLooksSane(post) {
+  if (!post) return false;
+  const { pM, pF } = post;
+  if (!Number.isFinite(pM) || !Number.isFinite(pF)) return false;
+  if (pM < 0 || pM > 1 || pF < 0 || pF > 1) return false;
+  if (Math.abs((pM + pF) - 1) > 1e-6) return false;
+
+  // Block “extreme” results per your requirement
+  if (Math.max(pM, pF) > 0.995) return false;
+
+  return true;
+}
+
+function userSpentLongEnough() {
+  return __active_ms >= 2 * 60 * 1000;
+}
+
+function isNotDefaultState() {
+  if (!__telemetry_baseline_state) return false;
+  return !stateEquals(currentState(), __telemetry_baseline_state);
+}
+
+function shouldSendTelemetry() {
+  if (!__telemetry_last_ok) return { ok: false, why: "last run not OK" };
+  if (!userSpentLongEnough()) return { ok: false, why: "active time < 2 min" };
+  if (!isNotDefaultState()) return { ok: false, why: "state is default" };
+  if (!posteriorLooksSane(__telemetry_last_posterior)) return { ok: false, why: "posterior invalid/extreme" };
+  return { ok: true, why: "ok" };
+}
+
 function buildTelemetryCsvRow(type, id) {
   const headers = (type === "ansur1") ? ANSUR1_HEADERS : ANSUR2_HEADERS;
   const row = Object.create(null);
@@ -857,7 +936,11 @@ function buildTelemetryCsvRow(type, id) {
 }
 
 function queueTelemetrySend() {
-  if (!__telemetry_last_ok) return;
+  const gate = shouldSendTelemetry();
+  if (!gate.ok) {
+    console.log(gate)
+    return;
+  }
 
   const deviceId = telemetryDeviceId();
   const eventId = telemetryEventId();
@@ -895,6 +978,38 @@ function queueTelemetrySend() {
     } catch { }
   }, 0);
 }
+
+// ---- Telemetry gating state ----
+let __telemetry_baseline_state = null;
+
+// Active time (visible + focused)
+let __active_ms = 0;
+let __active_timer = null;
+let __last_tick = (typeof performance !== "undefined" ? performance.now() : Date.now());
+
+function isActiveNow() {
+  return document.visibilityState === "visible" && document.hasFocus();
+}
+
+function startActiveTimer() {
+  if (__active_timer) return;
+  __active_timer = setInterval(() => {
+    const now = (typeof performance !== "undefined" ? performance.now() : Date.now());
+    const dt = Math.max(0, now - __last_tick);
+    __last_tick = now;
+    if (isActiveNow()) __active_ms += dt;
+  }, 250);
+}
+
+document.addEventListener("visibilitychange", () => {
+  __last_tick = (typeof performance !== "undefined" ? performance.now() : Date.now());
+});
+window.addEventListener("focus", () => { __last_tick = (typeof performance !== "undefined" ? performance.now() : Date.now()); });
+window.addEventListener("blur", () => { __last_tick = (typeof performance !== "undefined" ? performance.now() : Date.now()); });
+
+startActiveTimer();
+
+let __telemetry_last_posterior = null; // { pM, pF, kUsed }
 
 // Analysis
 
@@ -1007,6 +1122,8 @@ function runAnalysis() {
   const lse = logSumExp(logLikM, logLikF);
   const pM = Math.exp(logLikM - lse);
   const pF = Math.exp(logLikF - lse);
+
+  __telemetry_last_posterior = { pM, pF, kUsed };
 
   const condValueDisplay = (condDim === "length")
     ? convertToNative(condValueNative, condNative, condDisplayUnit, "length")
