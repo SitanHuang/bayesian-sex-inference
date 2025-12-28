@@ -604,6 +604,60 @@ function rebuildFieldList() {
   }
 }
 
+function niceFixed(x, unit) {
+  if (!Number.isFinite(x)) return "";
+  const ax = Math.abs(x);
+
+  // Units with obvious typical precision
+  if (unit === "mm") return x.toFixed(0);
+  if (unit === "m" || unit === "ft") return x.toFixed(3);
+
+  // Generic
+  if (ax >= 100) return x.toFixed(0);
+  if (ax >= 10) return x.toFixed(1);
+  return x.toFixed(2);
+}
+
+function suggestFieldPlaceholders(meta, unitChoice) {
+  if (!meta || !Number.isFinite(meta.median)) return { valPH: "Value", uncPH: "Uncertainty" };
+
+  const dim = meta.dim || "raw";
+  const native = meta.nativeUnit || "raw";
+  const u = unitChoice || defaultInputUnit(meta) || native;
+
+  // Value example (median)
+  let medDisp = meta.median;
+  if (dim === "length") medDisp = convertToNative(meta.median, native, u, "length");
+  else if (dim === "weight") medDisp = convertToNative(meta.median, native, u, "weight");
+
+  const valPH = Number.isFinite(medDisp)
+    ? `Value (e.g., ${niceFixed(medDisp, u)}${(dim === "length" || dim === "weight") ? " " + u : ""})`
+    : "Value";
+
+  // Uncertainty example: small, bounded fraction of median (clearly labeled as example)
+  if (!(dim === "length" || dim === "weight") || !Number.isFinite(medDisp)) {
+    return { valPH, uncPH: "Uncertainty (e.g., 1)" };
+  }
+
+  const unitMin = {
+    mm: 1,
+    cm: 0.1,
+    m: 0.01,
+    in: 0.1,
+    ft: 0.01,
+    kg: 0.1,
+    lb: 0.2
+  };
+  const minU = unitMin[u] ?? 0.1;
+
+  const base = Math.abs(medDisp) * 0.01;     // ~1% of median
+  const maxU = Math.max(minU, Math.abs(medDisp) * 0.05); // cap at ~5%
+  const uncDisp = Math.min(Math.max(base, minU), maxU);
+
+  const uncPH = `Uncertainty (e.g., ${niceFixed(uncDisp, u)} ${u})`;
+  return { valPH, uncPH };
+}
+
 function redrawSelectedFields() {
   const root = $("selectedFields");
   root.innerHTML = "";
@@ -639,7 +693,11 @@ function redrawSelectedFields() {
     // Value Input
     const inpVal = document.createElement("input");
     inpVal.style = "margin:0; font-size:12px;";
-    inpVal.placeholder = dim === "length" ? "Value (38 cm)" : "Value";
+
+    const unitChoiceForPH = cfg.unitChoice ?? preferred ?? native;
+    const ph = suggestFieldPlaceholders(meta, unitChoiceForPH);
+    inpVal.placeholder = ph.valPH;
+
     inpVal.value = cfg.valueText ?? "";
     inpVal.addEventListener("input", () => { cfg.valueText = inpVal.value; });
     grid.appendChild(inpVal);
@@ -666,7 +724,7 @@ function redrawSelectedFields() {
 
     const inpUnc = document.createElement("input");
     inpUnc.style = "margin:0; font-size:12px;";
-    inpUnc.placeholder = "Uncertainty";
+    inpUnc.placeholder = ph.uncPH;
     inpUnc.value = cfg.uncText ?? "";
     inpUnc.addEventListener("input", () => { cfg.uncText = inpUnc.value; });
 
