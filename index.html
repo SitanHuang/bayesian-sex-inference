@@ -169,6 +169,19 @@ Operators: AND, OR, parentheses ()"></textarea>
             </div>
           </div>
           <input id="selBWUnit" name="selBWUnit" type="hidden">
+
+          <p class="sub-label"
+            style="margin-top:10px; padding:10px; border:1px solid #e2e8f0; border-radius:8px; background:#f7fafc;">
+            Conditioning narrows the comparison population to individuals of a
+            similar dimension like stature (aka, standing height). A Gaussian
+            kernel is used to weight individuals in the dataset; those closer to
+            your specified conditioning value are weighted more heavily.
+            <br><br>
+            <strong>Important:</strong> <span style="color: red;"><b>Do not add the conditioning variable (or
+            its equivalents</b></span>, like <code>heightin</code> if you've conditioned on
+            <code>stature</code>) to the "Measurements" section below. This
+            would be redundant and skew the analysis.
+          </p>
         </div>
 
         <div class="control-group">
@@ -186,7 +199,7 @@ Operators: AND, OR, parentheses ()"></textarea>
             style="margin-top:10px; padding:10px; border:1px solid #e2e8f0; border-radius:8px; background:#f7fafc;">
             <strong>Instructions:</strong> Search for and select fields, then click <em>“Add Selected.”</em>
             <br><br>
-            For each field added, have another person use a medical-grade anthropometer to take
+            For each field added, have another person use a <b>medical-grade anthropometer</b> to take
             <b>at least three measurements per field</b>.
             <b>Consult the <a style="color: red;" href="http://tools.openlab.psu.edu/publicData/ANSURII-TR11-017.pdf" target="_blank">measurer's manual</a> and follow instructions closely on where and how to make each measurement.</b>
             <br><br>Enter the <b>average</b> into the measurement input box
@@ -196,6 +209,11 @@ Operators: AND, OR, parentheses ()"></textarea>
             As a low-cost alternative to a medical-grade anthropometer, a woodworking clamp
             approximately 2 feet long and 4 inches wide may be used as a makeshift caliper.
             Measure the span using a measuring tape.
+            <br><br>
+            For more realistic results on how you may be gendered by people, use
+            as few measurements as possible and only those that affect gendering
+            the most, such as biacromial breadth, hip breadth, and chest
+            breadth. If your measurements look out-of-range relative to the database, you might have not followed the correct measurement instructions in the above manual.
           </p>
 
           <div id="selectedFields"></div>
