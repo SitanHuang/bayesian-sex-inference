@@ -333,6 +333,31 @@ class Dataset {
     const bw = (iqr > 0 ? 0.20 * iqr : 0.08 * (q(0.95) - q(0.05)));
     return bw > 0 ? bw : 1;
   }
+
+  suggestBandwidthMasked(col, mask) {
+    const idx = this.colIndex.get(col);
+    const vals = [];
+    const cap = 4000;
+
+    for (let i = 0; i < this.rows.length; i++) {
+      if (mask && mask[i] === 0) continue;
+      const v = this.rows[i][idx];
+      const x = v === "" || v == null ? NaN : Number(v);
+      if (Number.isFinite(x)) {
+        vals.push(x);
+        if (vals.length >= cap) break;
+      }
+    }
+
+    if (vals.length < 50) return this.suggestBandwidth(col);
+
+    vals.sort((a, b) => a - b);
+    const q = (p) => vals[Math.floor(p * (vals.length - 1))];
+    const iqr = q(0.75) - q(0.25);
+    const bw = (iqr > 0 ? 0.20 * iqr : 0.08 * (q(0.95) - q(0.05)));
+    return bw > 0 ? bw : this.suggestBandwidth(col);
+  }
+
 }
 
 function gaussianKernel(u) { return Math.exp(-0.5 * u * u); }
@@ -1071,6 +1096,61 @@ let __telemetry_last_posterior = null; // { pM, pF, kUsed }
 
 // Analysis
 
+function tuneBandwidthForMinEff(condVals, condValue, mask, bw0, minEff, opts = {}) {
+  const maxIter = opts.maxIter ?? 50;
+  const relTol = opts.relTol ?? 1e-3;   // ~0.1% bandwidth precision by default
+  const absTol = opts.absTol ?? 1e-9;
+
+  let bw = (bw0 > 0) ? bw0 : 1;
+
+  // cap based on masked finite span (avoid runaway)
+  let min = Infinity, max = -Infinity, nFinite = 0;
+  for (let i = 0; i < condVals.length; i++) {
+    if (mask && mask[i] === 0) continue;
+    const x = condVals[i];
+    if (!Number.isFinite(x)) continue;
+    nFinite++;
+    if (x < min) min = x;
+    if (x > max) max = x;
+  }
+
+  const span = (nFinite >= 2) ? (max - min) : 0;
+  let cap = (span > 0) ? (span * 4) : (bw * 64);
+  if (!(cap > 0)) cap = bw * 64;
+  if (cap < bw) cap = bw; // important: never cap below the starting bw
+
+  // already enough at bw?
+  const w0 = computeWeights(condVals, condValue, bw, mask);
+  if (w0.nEff >= minEff) return { bw, nEff: w0.nEff, reached: true, nFinite };
+
+  // if even cap can't reach, bail early
+  const wCap0 = computeWeights(condVals, condValue, cap, mask);
+  if (wCap0.nEff < minEff) return { bw: cap, nEff: wCap0.nEff, reached: false, nFinite };
+
+  // binary search (assumes nEff is non-decreasing in bw; typical for kernel smoothing)
+  let low = bw;        // low is known to NOT meet minEff
+  let high = cap;      // high is known to meet minEff
+  let wHigh = wCap0;
+
+  for (let iter = 0; iter < maxIter; iter++) {
+    if ((high - low) <= Math.max(absTol, relTol * high)) break;
+
+    // search in multiplicative space (better than arithmetic mid for wide ranges)
+    const mid = Math.sqrt(low * high);
+
+    const wMid = computeWeights(condVals, condValue, mid, mask);
+    if (wMid.nEff >= minEff) {
+      high = mid;
+      wHigh = wMid;
+    } else {
+      low = mid;
+    }
+  }
+
+  return { bw: high, nEff: wHigh.nEff, reached: true, nFinite };
+}
+
+
 function runAnalysis() {
   if (!dsF || !dsM) return;
   $("runMsg").textContent = "";
@@ -1082,8 +1162,9 @@ function runAnalysis() {
   __telemetry_last_snapshot = null;
 
   let filterFn = null;
+  let built;
   try {
-    const built = buildFilterFunction($("txtFilter").value, dsF);
+    built = buildFilterFunction($("txtFilter").value, dsF);
     filterFn = built.fn;
     $("filterMsg").textContent = built.msg;
     $("filterMsg").style.color = "#38a169";
@@ -1103,13 +1184,13 @@ function runAnalysis() {
   const metaCond = dsF.getMeta(condCol) || dsM.getMeta(condCol);
   const condDim = metaCond?.dim || "raw";
   const condNative = metaCond?.nativeUnit || "raw";
+  const condDisplayUnit = $("selCondUnit").value || condFallbackUnit; // user-selected unit
 
   const condFallbackUnit = $("selCondUnit").value || defaultInputUnit(metaCond) || condNative;
   const pCond = parseNumberWithUnit($("inpCondVal").value, condFallbackUnit, condDim);
   if (!pCond.ok) { $("runMsg").textContent = "Invalid conditioning value."; return; }
 
   const condValueNative = convertToNative(pCond.value, pCond.unit, condNative, condDim);
-  const condDisplayUnit = $("selCondUnit").value || condFallbackUnit; // user-selected unit
   const pBw = parseNumberWithUnit($("inpBW").value, condDisplayUnit, condDim);
   if (!pBw.ok || !(pBw.value > 0)) { $("runMsg").textContent = "Invalid bandwidth."; return; }
 
@@ -1127,6 +1208,67 @@ function runAnalysis() {
 
   const weightsF = computeWeights(cache.condValsF, condValueNative, bwNative, maskF);
   const weightsM = computeWeights(cache.condValsM, condValueNative, bwNative, maskM);
+
+  const MIN_EFF = 25;
+
+  // Base BW suggestion from filtered distribution (fallback if masked method doesn't exist)
+  const bwBaseF = dsF.suggestBandwidthMasked ? dsF.suggestBandwidthMasked(condCol, maskF) : dsF.suggestBandwidth(condCol);
+  const bwBaseM = dsM.suggestBandwidthMasked ? dsM.suggestBandwidthMasked(condCol, maskM) : dsM.suggestBandwidth(condCol);
+
+  // Required BW to reach MIN_EFF at the current cond value + post-filter mask
+  const tunedF = tuneBandwidthForMinEff(cache.condValsF, condValueNative, maskF, bwBaseF, MIN_EFF);
+  const tunedM = tuneBandwidthForMinEff(cache.condValsM, condValueNative, maskM, bwBaseM, MIN_EFF);
+  const bwReqNative = Math.max(tunedF.bw, tunedM.bw);
+
+  const bwReqDisp = (condDim === "length")
+    ? convertToNative(bwReqNative, condNative, condDisplayUnit, "length")
+    : (condDim === "weight")
+      ? convertToNative(bwReqNative, condNative, condDisplayUnit, "weight")
+      : bwReqNative;
+
+  const bwReqFDisp = (condDim === "length")
+    ? convertToNative(tunedF.bw, condNative, condDisplayUnit, "length")
+    : (condDim === "weight")
+      ? convertToNative(tunedF.bw, condNative, condDisplayUnit, "weight")
+      : tunedF.bw;
+
+  const bwReqMDisp = (condDim === "length")
+    ? convertToNative(tunedM.bw, condNative, condDisplayUnit, "length")
+    : (condDim === "weight")
+      ? convertToNative(tunedM.bw, condNative, condDisplayUnit, "weight")
+      : tunedM.bw;
+
+  // Always show required BW info (post-filter, conditioning-specific)
+  $("filterMsg").innerHTML =
+    `Filter parsed. &nbsp; Required kernel bandwidth (post-filter, target nEff≥${MIN_EFF}): ` +
+    `<strong class="text-female">F ${fmt(bwReqFDisp, 3)} ${condDisplayUnit}</strong>` +
+    ` · <strong class="text-male">M ${fmt(bwReqMDisp, 3)} ${condDisplayUnit}</strong>` +
+    ` · <strong>${fmt(bwReqDisp, 3)} ${condDisplayUnit} (overall)</strong>`;
+  $("filterMsg").style.color = "#38a169";
+
+  const lowEff = (weightsF.nEff < MIN_EFF || weightsM.nEff < MIN_EFF);
+
+  let filterWarning = '';
+
+  if (lowEff) {
+    // If required BW is reachable but user BW is narrower, tell them to widen BW.
+    // If even tuned couldn't reach, then filter is too restrictive.
+    if (tunedF.reached && tunedM.reached) {
+      filterWarning = ` <br> <span style="color:#d69e2e;">⚠ Low effective kernel sample ` +
+        `(F≈${fmt(weightsF.nEff, 1)}, M≈${fmt(weightsM.nEff, 1)}). ` +
+        `Increase kernel bandwidth toward ${fmt(bwReqDisp, 3)} ${condDisplayUnit}.</span>`;
+      $("filterMsg").innerHTML += filterWarning;
+    } else {
+      filterWarning = ` <br> <span style="color:#d69e2e;">⚠ Low effective kernel sample ` +
+        `(F≈${fmt(weightsF.nEff, 1)}, M≈${fmt(weightsM.nEff, 1)}). ` +
+        `Not enough rows after filter to reach nEff≥${MIN_EFF} at this conditioning value.</span>`
+      $("filterMsg").innerHTML += filterWarning;
+    }
+  } else {
+    // Optional: show OK status only when it actually meets the threshold
+    $("filterMsg").innerHTML +=
+      ` &nbsp; <span style="color:#38a169;">✓ nEff OK (F≈${fmt(weightsF.nEff, 1)}, M≈${fmt(weightsM.nEff, 1)})</span>`;
+  }
 
   const priorM = clamp01(Number($("inpPriorM").value));
   const priorF = 1 - priorM;
@@ -1199,7 +1341,8 @@ function runAnalysis() {
   $("headerSummary").innerHTML =
     `Conditioning: <strong>${condCol}</strong> @ ${fmt(condValueDisplay, 3)} ${condDisplayUnit} ` +
     `(Bandwidth: ${fmt(bwDisplay, 3)} ${condDisplayUnit}) <br>` +
-    `Effective Sample (Kernel): F≈${fmt(weightsF.nEff, 1)}, M≈${fmt(weightsM.nEff, 1)}`;
+    `Effective Sample (Kernel): F≈${fmt(weightsF.nEff, 1)}, M≈${fmt(weightsM.nEff, 1)}` +
+    filterWarning;
 
   // Typicality
   if (kUsed > 0) {
