@@ -78,6 +78,8 @@
           <a href="mailto:huangsitan@gmail.com">Email</a> •
           <a href="https://github.com/SitanHuang" target="_blank">GitHub</a> •
           <a href="https://www.linkedin.com/in/sitanhuang/" target="_blank">LinkedIn</a>
+          <br>
+          <i>Have questions / issues with quality assurance? Shoot me an email!</i>
         </div>
       </div>
 
@@ -123,8 +125,8 @@
         <div class="control-group">
           <h2>2. Filter Population (Optional)</h2>
           <textarea id="txtFilter" class="mono" disabled style="min-height:12em;" placeholder="Examples (regex):
-(DODRace ~= /1/ AND Ethnicity ~= /Hisp/i) OR SubjectsBirthLocation ~= /New York/i
-Branch ~= /Regular Army/i AND (Installation ~= /Fort Hood/i OR Installation ~= /Bragg/i)
+(DODRace ~= /1/ OR Ethnicity ~= /Chinese/i) OR SubjectsBirthLocation ~= /New York/i
+Branch ~= /Combat Support/i AND (Installation ~= /Fort Hood/i OR Installation ~= /Bragg/i)
 
 Syntax:
 FieldName ~= /pattern/flags
@@ -221,7 +223,7 @@ Operators: AND, OR, parentheses ()"></textarea>
         </div>
 
         <div style="position:sticky; bottom:0; background:white; padding-top:10px; border-top:1px solid #eee;">
-          <button type="button" id="btnRun" disabled class="btn-primary" style="padding:12px; font-size:14px;">GENERATE
+          <button type="button" id="btnRun" disabled class="btn-primary" style="padding:10px; font-size:14px;">GENERATE
             REPORT</button>
           <div class="row" style="margin-top:8px;">
             <button type="button" id="btnSave" disabled class="btn-secondary btn-sm" style="flex:1;">Save Config to localStorage</button>
@@ -238,7 +240,7 @@ Operators: AND, OR, parentheses ()"></textarea>
       <div class="paper">
 
         <header class="paper-header">
-          <h1 class="paper-title">Bayesian Anthropometric Analysis</h1>
+          <h1 class="paper-title">Bayesian Anthropometric Sex Inference</h1>
           <div class="paper-meta">
             <!-- Generated using Conditional Gaussian Kernel Estimation + ANSUR Dataset -->
           </div>

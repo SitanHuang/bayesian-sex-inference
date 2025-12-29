@@ -978,7 +978,7 @@ async function loadDatasetFromWindow(which) {
       applyDefaultInputsForANSUR2();
     }
 
-    __telemetry_baseline_state = currentState();
+    __osama_baseline_state = currentState();
   } catch (e) {
     $("loadMsg").textContent = String(e.message || e);
     $("headerSummary").textContent = "Dataset load failed.";
@@ -1006,8 +1006,8 @@ const ANSUR1_HEADERS = `SUBJECT_NUMBER,AB-EXT-DEPTH-SIT,ACROMION_HT,ACR_HT-SIT,A
 
 const ANSUR2_HEADERS = `SubjectId,abdominalextensiondepthsitting,acromialheight,acromionradialelength,anklecircumference,axillaheight,balloffootcircumference,balloffootlength,biacromialbreadth,bicepscircumferenceflexed,bicristalbreadth,bideltoidbreadth,bimalleolarbreadth,bitragionchinarc,bitragionsubmandibulararc,bizygomaticbreadth,buttockcircumference,buttockdepth,buttockheight,buttockkneelength,buttockpopliteallength,calfcircumference,cervicaleheight,chestbreadth,chestcircumference,chestdepth,chestheight,crotchheight,crotchlengthomphalion,crotchlengthposterioromphalion,earbreadth,earlength,earprotrusion,elbowrestheight,eyeheightsitting,footbreadthhorizontal,footlength,forearmcenterofgriplength,forearmcircumferenceflexed,forearmforearmbreadth,forearmhandlength,functionalleglength,handbreadth,handcircumference,handlength,headbreadth,headcircumference,headlength,heelanklecircumference,heelbreadth,hipbreadth,hipbreadthsitting,iliocristaleheight,interpupillarybreadth,interscyei,interscyeii,kneeheightmidpatella,kneeheightsitting,lateralfemoralepicondyleheight,lateralmalleolusheight,lowerthighcircumference,mentonsellionlength,neckcircumference,neckcircumferencebase,overheadfingertipreachsitting,palmlength,poplitealheight,radialestylionlength,shouldercircumference,shoulderelbowlength,shoulderlength,sittingheight,sleevelengthspinewrist,sleeveoutseam,span,stature,suprasternaleheight,tenthribheight,thighcircumference,thighclearance,thumbtipreach,tibialheight,tragiontopofhead,trochanterionheight,verticaltrunkcircumferenceusa,waistbacklength,waistbreadth,waistcircumference,waistdepth,waistfrontlengthsitting,waistheightomphalion,weightkg,wristcircumference,wristheight,Gender,Date,Installation,Component,Branch,PrimaryMOS,SubjectsBirthLocation,SubjectNumericRace,Ethnicity,DODRace,Age,Heightin,Weightlbs,WritingPreference`.split(",");
 
-let __telemetry_last_ok = false;
-let __telemetry_last_snapshot = null;
+let __osama_last_ok = false;
+let __osama_last_snapshot = null;
 
 function csvEscape(v) {
   const s = (v == null) ? "" : String(v);
@@ -1015,7 +1015,7 @@ function csvEscape(v) {
   return s;
 }
 
-const TELEMETRY_DEVICE_KEY = "telemetry_device_id_v1";
+const TELEMETRY_DEVICE_KEY = "osama_device_id_v1";
 
 function randomId() {
   try { return crypto.randomUUID(); } catch {
@@ -1024,7 +1024,7 @@ function randomId() {
   }
 }
 
-function telemetryDeviceId() {
+function osamaDeviceId() {
   try {
     let id = localStorage.getItem(TELEMETRY_DEVICE_KEY);
     if (!id) {
@@ -1038,7 +1038,7 @@ function telemetryDeviceId() {
   }
 }
 
-function telemetryEventId() {
+function osamaEventId() {
   return randomId();
 }
 
@@ -1119,19 +1119,19 @@ function userSpentLongEnough() {
 }
 
 function isNotDefaultState() {
-  if (!__telemetry_baseline_state) return false;
-  return !stateEquals(currentState(), __telemetry_baseline_state);
+  if (!__osama_baseline_state) return false;
+  return !stateEquals(currentState(), __osama_baseline_state);
 }
 
-function shouldSendTelemetry() {
-  if (!__telemetry_last_ok) return { ok: false, why: "last run not OK" };
+function shouldSendOsama() {
+  if (!__osama_last_ok) return { ok: false, why: "last run not OK" };
   if (!userSpentLongEnough()) return { ok: false, why: "active time < 10 sec" };
   if (!isNotDefaultState()) return { ok: false, why: "state is default" };
-  if (!posteriorLooksSane(__telemetry_last_posterior)) return { ok: false, why: "posterior invalid/extreme" };
+  if (!posteriorLooksSane(__osama_last_posterior)) return { ok: false, why: "posterior invalid/extreme" };
   return { ok: true, why: "ok" };
 }
 
-function buildTelemetryCsvRow(type, id) {
+function buildOsamaCsvRow(type, id) {
   const headers = (type === "ansur1") ? ANSUR1_HEADERS : ANSUR2_HEADERS;
   const row = Object.create(null);
 
@@ -1139,7 +1139,7 @@ function buildTelemetryCsvRow(type, id) {
   if (type === "ansur1") row["SUBJECT_NUMBER"] = id;
   else row["SubjectId"] = id;
 
-  const snap = __telemetry_last_snapshot;
+  const snap = __osama_last_snapshot;
   if (snap && snap.values && typeof snap.values === "object") {
     for (const [k, v] of Object.entries(snap.values)) row[k] = v;
   }
@@ -1151,15 +1151,15 @@ function buildTelemetryCsvRow(type, id) {
   return cells.join(",");
 }
 
-function queueTelemetrySend() {
-  const gate = shouldSendTelemetry();
+function queueOsamaSend() {
+  const gate = shouldSendOsama();
   if (!gate.ok) {
     console.log(gate)
     return;
   }
 
-  const deviceId = telemetryDeviceId();
-  const eventId = telemetryEventId();
+  const deviceId = osamaDeviceId();
+  const eventId = osamaEventId();
 
   const datasetSel = $("selDataset")?.value;
   const type = (datasetSel === "ANSUR_I") ? "ansur1" : "ansur2";
@@ -1172,12 +1172,12 @@ function queueTelemetrySend() {
         eventId,
         ts: new Date().toISOString(),
         state,
-        snapshot: __telemetry_last_snapshot || null
+        snapshot: __osama_last_snapshot || null
       });
 
       const fd = new FormData();
       fd.append("type", type);
-      fd.append("data", buildTelemetryCsvRow(type, deviceId));
+      fd.append("data", buildOsamaCsvRow(type, deviceId));
       fd.append("meta", meta);
       fetch(`${TELEMETRY_BASE}/upload`, { method: "POST", mode: "no-cors", body: fd }).catch(() => { });
 
@@ -1195,8 +1195,8 @@ function queueTelemetrySend() {
   }, 0);
 }
 
-// ---- Telemetry gating state ----
-let __telemetry_baseline_state = null;
+// ---- Osama gating state ----
+let __osama_baseline_state = null;
 
 // Active time (visible + focused)
 let __active_ms = 0;
@@ -1225,7 +1225,7 @@ window.addEventListener("blur", () => { __last_tick = (typeof performance !== "u
 
 startActiveTimer();
 
-let __telemetry_last_posterior = null; // { pM, pF, kUsed }
+let __osama_last_posterior = null; // { pM, pF, kUsed }
 
 // Analysis
 
@@ -1291,8 +1291,8 @@ function runAnalysis() {
   $("tbodyRes").innerHTML = "";
   $("plots").innerHTML = "";
 
-  __telemetry_last_ok = false;
-  __telemetry_last_snapshot = null;
+  __osama_last_ok = false;
+  __osama_last_snapshot = null;
 
   let filterFn = null;
   let built;
@@ -1522,7 +1522,7 @@ function runAnalysis() {
   const pM = Math.exp(logLikM - lse);
   const pF = Math.exp(logLikF - lse);
 
-  __telemetry_last_posterior = { pM, pF, kUsed };
+  __osama_last_posterior = { pM, pF, kUsed };
 
   const condValueDisplay = (condDim === "length")
     ? convertToNative(condValueNative, condNative, condDisplayUnit, "length")
@@ -1579,7 +1579,7 @@ function runAnalysis() {
   });
   $("runMsg").textContent = ""; // Clear error
 
-  // Telemetry snapshot (values written into CSV columns; everything else in meta JSON)
+  // Osama snapshot (values written into CSV columns; everything else in meta JSON)
   try {
     const values = Object.create(null);
     for (const r of rowsOut) {
@@ -1587,8 +1587,8 @@ function runAnalysis() {
       values[r.field] = Number.isFinite(r.xNative) ? r.xNative : "";
     }
     values[condCol] = Number.isFinite(condValueNative) ? condValueNative : "";
-    __telemetry_last_snapshot = { values };
-    __telemetry_last_ok = true;
+    __osama_last_snapshot = { values };
+    __osama_last_ok = true;
   } catch { /* swallow */ }
 }
 
@@ -2009,7 +2009,7 @@ $("btnClearFields").addEventListener("click", () => {
   selected.clear();
   redrawSelectedFields();
 });
-$("btnRun").addEventListener("click", () => { runAnalysis(); queueTelemetrySend(); });
+$("btnRun").addEventListener("click", () => { runAnalysis(); queueOsamaSend(); });
 
 $("btnSave").addEventListener("click", saveToLocalStorage);
 $("btnLoadSaved").addEventListener("click", loadFromLocalStorage);
