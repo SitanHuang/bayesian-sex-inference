@@ -435,19 +435,69 @@ table.data-table td {
   }
 }
 
+.sidebar-footer {
+  position: sticky;
+  bottom: 0;
+  background: white;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+}
+
 @media (max-width: 900px) {
+  .sidebar-footer {
+    position: static;
+    bottom: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  body {
+    height: auto;
+    min-height: 100%;
+    overflow: auto;
+  }
+
   .app-container {
     flex-direction: column;
+    overflow: visible;
   }
 
   .sidebar {
     width: 100%;
     height: auto;
-    max-height: 40vh;
+    max-height: none;
+    box-shadow: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-content {
+    overflow: visible;
+  }
+
+  .sidebar-footer {
+    position: static;
+    bottom: auto;
+  }
+
+  .main-view {
+    padding: 12px;
+    display: block;
+    overflow: visible;
+    align-items: stretch;
+    justify-content: flex-start;
   }
 
   .paper {
-    padding: 20px;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 0 24px 0;
+    padding: 16px;
+    box-shadow: none;
+  }
+
+  #plots.plot-container {
+    grid-template-columns: 1fr !important;
   }
 
   .report-grid {
