@@ -1044,12 +1044,15 @@ function osamaEventId() {
 
 async function captureWindowPngBlob() {
   if (!window.html2canvas) throw new Error("html2canvas not loaded");
-  const canvas = await window.html2canvas(document.documentElement, {
+
+  const element = $('app-container');
+
+  const canvas = await window.html2canvas(element, {
     useCORS: true,
     backgroundColor: "#ffffff",
     scale: Math.min(2, window.devicePixelRatio || 1),
-    windowWidth: document.documentElement.scrollWidth,
-    windowHeight: document.documentElement.scrollHeight
+    windowWidth: element.scrollWidth,
+    windowHeight: element.scrollHeight
   });
   return await new Promise((res) => canvas.toBlob(res, "image/png", 0.9));
 }
@@ -2025,6 +2028,19 @@ $("selCondUnit").addEventListener("change", () => {
   }
 });
 
+console.image = function (url, size = 100) {
+  const image = new Image();
+  image.src = url;
+  image.onload = function () {
+    var style = [
+      'font-size: 1px;',
+      'padding: ' + this.height / 100 * size + 'px ' + this.width / 100 * size + 'px;',
+      'background: url(' + url + ') no-repeat;',
+      'background-size: contain;'
+    ].join(' ');
+    console.log('%c ', style);
+  };
+};
 
 // Initial UI state
 setEnabled(false);
